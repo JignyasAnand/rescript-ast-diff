@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
+    "requests>=2.32.3",
     "tree-sitter",
     "tree-sitter-rescript",
 ]

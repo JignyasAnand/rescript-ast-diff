@@ -58,11 +58,9 @@ def format_rescript_file(file_pth):
 
 
 class RescriptFileDiff:
-    def __init__(self, old_file_ast, new_file_ast, module_name=""):
-        self.old_file_root = old_file_ast.root_node
-        self.new_file_root = new_file_ast.root_node
+    def __init__(self, module_name=""):
+        self.changes = DetailedChanges(module_name)
 
-        self.module_name = module_name
     
     def get_decl_name(self, node: Node, node_type: str, name_type: str) -> str:
         for child in node.children:
@@ -141,25 +139,40 @@ class RescriptFileDiff:
 
         return {"added": added, "deleted": deleted, "modified": modified}
 
-    def process_files(self) -> DetailedChanges:
-        old_funcs, old_types, old_ext = self.extract_components(self.old_file_root)
-        new_funcs, new_types, new_ext = self.extract_components(self.new_file_root)
-
-        changes = DetailedChanges(self.module_name)
+    def compare_two_files(self, old_file_ast, new_file_ast) -> DetailedChanges:
+        old_funcs, old_types, old_ext = self.extract_components(old_file_ast.root_node)
+        new_funcs, new_types, new_ext = self.extract_components(new_file_ast.root_node)
 
         funcs_diff = self.diff_components(old_funcs, new_funcs)
-        changes.addedFunctions = funcs_diff["added"]
-        changes.deletedFunctions = funcs_diff["deleted"]
-        changes.modifiedFunctions = funcs_diff["modified"]
+        self.changes.addedFunctions = funcs_diff["added"]
+        self.changes.deletedFunctions = funcs_diff["deleted"]
+        self.changes.modifiedFunctions = funcs_diff["modified"]
 
         types_diff = self.diff_components(old_types, new_types)
-        changes.addedTypes = types_diff["added"]
-        changes.deletedTypes = types_diff["deleted"]
-        changes.modifiedTypes = types_diff["modified"]
+        self.changes.addedTypes = types_diff["added"]
+        self.changes.deletedTypes = types_diff["deleted"]
+        self.changes.modifiedTypes = types_diff["modified"]
 
         ext_diff = self.diff_components(old_ext, new_ext)
-        changes.addedExternals = ext_diff["added"]
-        changes.deletedExternals = ext_diff["deleted"]
-        changes.modifiedExternals = ext_diff["modified"]
+        self.changes.addedExternals = ext_diff["added"]
+        self.changes.deletedExternals = ext_diff["deleted"]
+        self.changes.modifiedExternals = ext_diff["modified"]
 
-        return changes
+        return self.changes
+
+    def process_single_file(self, file_ast, mode="deleted"):
+        funcs, types, exts = self.extract_components(file_ast.root_node)
+        func_names = set(funcs.keys())
+        type_names = set(types.keys())
+        ext_names = set(exts.keys())
+
+        if mode == "deleted":
+            self.changes.deletedFunctions = [(n, funcs[n][1]) for n in sorted(func_names)]
+            self.changes.deletedTypes = [(n, types[n][1]) for n in sorted(type_names)]
+            self.changes.deletedExternals = [(n, exts[n][1]) for n in sorted(ext_names)]
+        else:
+            self.changes.addedFunctions = [(n, funcs[n][1]) for n in sorted(func_names)]
+            self.changes.addedTypes = [(n, types[n][1]) for n in sorted(type_names)]
+            self.changes.addedExternals = [(n, exts[n][1]) for n in sorted(ext_names)]
+        
+        return self.changes

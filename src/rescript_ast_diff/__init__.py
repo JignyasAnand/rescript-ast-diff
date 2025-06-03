@@ -1,1 +1,1 @@
-from .compare_commits import compare_commits
+from .compare_commits import *

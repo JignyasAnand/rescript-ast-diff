@@ -6,6 +6,8 @@ import tree_sitter_rescript
 import json
 from collections import defaultdict
 from rescript_ast_diff.differ import RescriptFileDiff
+from rescript_ast_diff.bitbucket import BitBucket
+import traceback
 
 
 def extract_module_name(filepath):
@@ -33,7 +35,7 @@ def get_changed_files(branch_or_commit, new_commit, local_path):
     finally:
         os.chdir(old_cwd)
 
-def compare_commits(repo_url, local_repo_path, branch_or_commit, current_commit, output_dir):
+def generate_changes_local(repo_url, local_repo_path, branch_or_commit, current_commit, output_dir):
     try:
         RS_LANGUAGE = Language(tree_sitter_rescript.language())
         parser = Parser(RS_LANGUAGE)
@@ -86,4 +88,70 @@ def compare_commits(repo_url, local_repo_path, branch_or_commit, current_commit,
 
     except Exception as e:
         print("ERROR - ", e)
-        pass
+        print(traceback.format_exc())
+
+def generate_pr_changes_bitbucket(pr_id: str, bitbucket_object: BitBucket, output_dir="./", quiet=True):
+
+    try:
+        RS_LANGUAGE = Language(tree_sitter_rescript.language())
+        parser = Parser(RS_LANGUAGE)
+        if not isinstance(bitbucket_object, BitBucket):
+            raise Exception("You should pass an valid bitbucket object")
+        
+        pull_request = bitbucket_object.get_pr_bitbucket(pr_id)
+        latest_commit, old_commit = pull_request["fromRef"]["latestCommit"], pull_request["toRef"]["latestCommit"]
+
+        print("LATEST COMMIT -", latest_commit)
+        print("OLDEST COMMIT -", old_commit)
+
+        changed_files = bitbucket_object.get_changed_files_from_commits(latest_commit, old_commit)
+
+        all_changes = []
+        for changed_file in changed_files["modified"]:
+            if changed_file[-4:] != ".res":
+                continue
+            old_file = bitbucket_object.get_file_content_from_bitbucket(changed_file, old_commit)
+            new_file = bitbucket_object.get_file_content_from_bitbucket(changed_file, latest_commit)
+            old_ast = parser.parse(old_file.encode())
+            new_ast = parser.parse(new_file.encode())
+            diff = RescriptFileDiff(changed_file)
+            changes = diff.compare_two_files(old_ast, new_ast)
+            all_changes.append(changes.to_dict())
+            if not quiet:
+                print("PROCESSED MODIFIED FILE -", changed_file)
+        
+        for added_file in changed_files["added"]:
+            if added_file[-4:] != ".res":
+                continue
+            file_content = bitbucket_object.get_file_content_from_bitbucket(added_file, latest_commit)
+            file_ast = parser.parse(file_content.encode())
+            diff = RescriptFileDiff(added_file)
+            changes = diff.process_single_file(file_ast, mode="added")
+            all_changes.append(changes.to_dict())
+            if not quiet:
+                print("PROCESSED ADDED FILE -", added_file)
+
+        for deleted_file in changed_files["deleted"]:
+            if deleted_file[-4:] != ".res":
+                continue
+            file_content = bitbucket_object.get_file_content_from_bitbucket(deleted_file, old_commit)
+            file_ast = parser.parse(file_content.encode())
+            diff = RescriptFileDiff(deleted_file)
+            changes = diff.process_single_file(file_ast, mode="deleted")
+            all_changes.append(changes.to_dict())
+            if not quiet:
+                print("PROCESSED DELETED FILE -", deleted_file)
+
+        final_output_path = os.path.join(output_dir, "detailed_changes.json")
+        with open(final_output_path, "w") as f:
+            json.dump(all_changes, f, indent = 3)
+        
+        print("Changes written to - ", final_output_path)
+
+    except Exception as e:
+        print("ERROR - ", e)
+        print(traceback.format_exc())
+
+# if __name__ == "__main__":
+#     bitbucket = BitBucket(BASE_URL, PROJECT_KEY, REPO_SLUG, AUTH, HEADERS)
+#     generate_pr_changes_bitbucket("19971", bitbucket, quiet=False)
