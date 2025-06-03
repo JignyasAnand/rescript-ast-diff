@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "requests>=2.32.3",
     "tree-sitter",
-    "tree-sitter-rescript @ git+https://github.com/rescript-lang/tree-sitter-rescript",
+    "tree-sitter-rescript@git+https://github.com/rescript-lang/tree-sitter-rescript",
 ]
 
 [build-system]
