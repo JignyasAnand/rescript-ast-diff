@@ -5,7 +5,7 @@ from tree_sitter import Language, Parser, Node
 import tree_sitter_rescript
 import json
 from collections import defaultdict
-from differ import RescriptFileDiff
+from rescript_ast_diff.differ import RescriptFileDiff
 
 
 def extract_module_name(filepath):
