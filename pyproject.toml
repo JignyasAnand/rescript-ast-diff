@@ -9,10 +9,10 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "requests>=2.32.3",
-    "tree-sitter @ git+https://github.com/tree-sitter/py-tree-sitter",
+    "tree-sitter",
     "tree-sitter-rescript @ git+https://github.com/rescript-lang/tree-sitter-rescript",
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
