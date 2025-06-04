@@ -93,6 +93,11 @@ class RescriptFileDiff:
 
             if node.type == "let_declaration":
                 name = self.get_decl_name(node, "let_binding", "value_identifier")
+                if node.parent.type != "source_file":
+                    try:
+                        name = f"{node.parent.parent.child(0).text.decode()} --> {name}"
+                    except:
+                        pass
                 if name:
                     ast_repr = self.ast_to_tuple(node)
                     body_text = node.text.decode(errors="ignore")
