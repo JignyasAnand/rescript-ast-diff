@@ -96,21 +96,21 @@ class RescriptFileDiff:
                 if name:
                     ast_repr = self.ast_to_tuple(node)
                     body_text = node.text.decode(errors="ignore")
-                    functions[name] = (ast_repr, body_text)
+                    functions[name] = (ast_repr, body_text, node.start_point, node.end_point)
 
             elif node.type == "type_declaration":
                 name = self.get_decl_name(node, "type_binding", "type_identifier")
                 if name:
                     ast_repr = self.ast_to_tuple(node)
                     body_text = node.text.decode(errors="ignore")
-                    types[name] = (ast_repr, body_text)
+                    types[name] = (ast_repr, body_text, node.start_point, node.end_point)
 
             elif node.type == "external_declaration":
                 name = self.get_decl_name(node, None, "value_identifier")
                 if name:
                     ast_repr = self.ast_to_tuple(node)
                     body_text = node.text.decode(errors="ignore")
-                    externals[name] = (ast_repr, body_text)
+                    externals[name] = (ast_repr, body_text, node.start_point, node.end_point)
 
             else:
                 for child in reversed(node.children):
@@ -132,10 +132,10 @@ class RescriptFileDiff:
 
         modified = []
         for name in sorted(common):
-            old_ast, old_body = before_map[name]
-            new_ast, new_body = after_map[name]
+            old_ast, old_body, old_start, old_end = before_map[name]
+            new_ast, new_body, new_start, new_end = after_map[name]
             if old_ast != new_ast:
-                modified.append((name, old_body, new_body))
+                modified.append((name, old_body, new_body, {"old_start": old_start, "old_end": old_end, "new_start": new_start, "new_end": new_end}))
 
         return {"added": added, "deleted": deleted, "modified": modified}
 
