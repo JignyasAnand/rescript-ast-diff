@@ -14,12 +14,18 @@ class DetailedChanges:
         self.addedFunctions = []
         self.modifiedFunctions = []
         self.deletedFunctions = []
+
         self.addedTypes = []
         self.modifiedTypes = []
         self.deletedTypes = []
+
         self.addedExternals = []
         self.modifiedExternals = []
         self.deletedExternals = []
+
+        self.addedImports = []
+        self.modifiedImports = []
+        self.deletedImports = []
 
     def to_dict(self):
         return {
@@ -61,7 +67,6 @@ class RescriptFileDiff:
     def __init__(self, module_name=""):
         self.changes = DetailedChanges(module_name)
 
-    
     def get_decl_name(self, node: Node, node_type: str, name_type: str) -> str:
         for child in node.children:
             if node_type and child.type == node_type:
@@ -72,56 +77,60 @@ class RescriptFileDiff:
                 return child.text.decode(errors="ignore")
         return None
 
-    def ast_to_tuple(self, node: Node) -> tuple:
-        named_children = [c for c in node.children if c.is_named]
-        if not named_children:
-            text = node.text.decode(errors="ignore")
-            return (node.type, text)
-        return (
-            node.type,
-            tuple(self.ast_to_tuple(c) for c in named_children)
-        )
+    def deep_equal(self, nodeA: Node, nodeB: Node):
+        if (nodeA is None) != (nodeB is None):
+            return False
 
-    def extract_components(self, root: Node) -> tuple:
-        stack = [root]
+        if nodeA is None and nodeB is None:
+            return True
+
+        if nodeA.type != nodeB.type:
+            return False
+
+        childrenA = nodeA.named_children
+        childrenB = nodeB.named_children
+
+        if len(childrenA) != len(childrenB):
+            return False
+
+        if len(childrenA) == 0:
+            return nodeA.text == nodeB.text
+
+        for childA, childB in zip(childrenA, childrenB):
+            if not self.deep_equal(childA, childB):
+                return False
+
+        return True
+
+    def extract_components(self, root: Node):
+        queue = [root]
+        
         functions = {}
         types = {}
         externals = {}
 
-        while stack:
-            node = stack.pop()
+        node_name_mapper = {
+            "let_declaration": (functions, lambda x: self.get_decl_name(x, "let_binding", "value_identifier")),
+            "type_declaration": (types, lambda x: self.get_decl_name(x, "type_binding", "type_identifier")),
+            "external_declaration": (externals, lambda x: self.get_decl_name(x, None, "value_identifier"))
+        }
 
-            if node.type == "let_declaration":
-                name = self.get_decl_name(node, "let_binding", "value_identifier")
-                if node.parent.type != "source_file":
-                    try:
-                        name = f"{node.parent.parent.child(0).text.decode()} --> {name}"
-                    except:
-                        pass
+        while queue:
+            current_node = queue.pop()
+            if current_node.type in node_name_mapper.keys():
+                dct, mapper_function = node_name_mapper[current_node.type]
+                name = mapper_function(current_node)
                 if name:
-                    ast_repr = self.ast_to_tuple(node)
-                    body_text = node.text.decode(errors="ignore")
-                    functions[name] = (ast_repr, body_text, node.start_point, node.end_point)
-
-            elif node.type == "type_declaration":
-                name = self.get_decl_name(node, "type_binding", "type_identifier")
-                if name:
-                    ast_repr = self.ast_to_tuple(node)
-                    body_text = node.text.decode(errors="ignore")
-                    types[name] = (ast_repr, body_text, node.start_point, node.end_point)
-
-            elif node.type == "external_declaration":
-                name = self.get_decl_name(node, None, "value_identifier")
-                if name:
-                    ast_repr = self.ast_to_tuple(node)
-                    body_text = node.text.decode(errors="ignore")
-                    externals[name] = (ast_repr, body_text, node.start_point, node.end_point)
-
+                    if current_node.parent.type != "source_file":
+                        try:
+                            name = f"{current_node.parent.parent.child(0).text.decode()} --> {name}"
+                        except:
+                            pass
+                    dct[name] = (current_node, current_node.text.decode(errors="ignore"), current_node.start_point, current_node.end_point)
             else:
-                for child in reversed(node.children):
+                for child in reversed(current_node.children):
                     if child.is_named:
-                        stack.append(child)
-
+                        queue.append(child)
         return functions, types, externals
 
     def diff_components(self, before_map: dict, after_map: dict) -> dict:
@@ -139,7 +148,7 @@ class RescriptFileDiff:
         for name in sorted(common):
             old_ast, old_body, old_start, old_end = before_map[name]
             new_ast, new_body, new_start, new_end = after_map[name]
-            if old_ast != new_ast:
+            if not self.deep_equal(old_ast, new_ast):
                 modified.append((name, old_body, new_body, {"old_start": old_start, "old_end": old_end, "new_start": new_start, "new_end": new_end}))
 
         return {"added": added, "deleted": deleted, "modified": modified}
